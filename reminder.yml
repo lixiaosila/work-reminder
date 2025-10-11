@@ -1,0 +1,24 @@
+name: 下班提醒
+
+on:
+  schedule:
+    # 北京时间每天17:30触发（UTC+8是9:30）
+    - cron: '30 9 * * 1-5'
+  workflow_dispatch: # 允许手动触发测试
+
+jobs:
+  send-reminder:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 发送企微提醒
+        run: |
+          curl -X POST \
+            "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=${{ secrets.WEBHOOK_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "msgtype": "text",
+              "text": {
+                "content": "🎉 小伙伴们，下班时间快到啦！\n记得登记云效工时关闭状态哦~",
+                "mentioned_list": ["@all"]
+              }
+            }'
