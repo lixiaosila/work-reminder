@@ -1,4 +1,4 @@
-name: 下班提醒
+name: 云效提醒
 
 on:
   schedule:
@@ -18,7 +18,7 @@ jobs:
             -d '{
               "msgtype": "text",
               "text": {
-                "content": "🎉 小伙伴们，下班时间到啦！\n记得写今日总结和明日计划哦~",
+                "content": "🎉 小伙伴们，别忘了云效任务（关闭状态、登记工时！）",
                 "mentioned_list": ["@all"]
               }
             }'
