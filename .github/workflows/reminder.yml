@@ -2,11 +2,11 @@ name: 下班提醒
 
 on:
   schedule:
-    # 第一次提醒：北京时间17:50（UTC+8是9:50）
-    - cron: '50 9 * * 1-5'
-    # 第二次提醒：北京时间18:10（UTC+8是10:10）
-    - cron: '10 10 * * 1-5'
-  workflow_dispatch: # 允许手动触发测试
+    # 调整为17:45触发（UTC 09:45），预计17:50-17:55收到
+    - cron: '45 9 * * 1-5'
+    # 调整为18:05触发（UTC 10:05），预计18:10-18:15收到
+    - cron: '05 10 * * 1-5'
+  workflow_dispatch:
 
 jobs:
   send-reminder:
@@ -14,14 +14,14 @@ jobs:
     steps:
       - name: 发送企微提醒
         run: |
-          # 获取当前UTC时间，用于判断是第一次还是第二次提醒
+          # 获取当前UTC时间来判断是哪次提醒
           CURRENT_HOUR=$(date -u +%H)
           CURRENT_MINUTE=$(date -u +%M)
           
-          if [ "$CURRENT_HOUR" = "09" ] && [ "$CURRENT_MINUTE" = "50" ]; then
-            MESSAGE="🕔 【第一次提醒】小伙伴们，还有10分钟下班！光速整理云效任务！~"
+          if [ "$CURRENT_HOUR" = "09" ] && [ "$CURRENT_MINUTE" = "45" ]; then
+            MESSAGE="🕔 【第一次提醒】小伙伴们，快下班啦！开始检查云效任务关闭情况"
           else
-            MESSAGE="🎉 【第二次提醒】下班啦！再检查一遍云效任务！~"
+            MESSAGE="🎉 【第二次提醒】小伙伴们，再次提醒！检查云效任务关闭情况以及工时登记（8小时）"
           fi
           
           curl -X POST \
