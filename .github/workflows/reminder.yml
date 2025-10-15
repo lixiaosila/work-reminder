@@ -1,9 +1,9 @@
-name: 云效提醒
+name: 下班提醒
 
 on:
   schedule:
-    # 北京时间每天17:30触发（UTC+8是9:30）
-    - cron: '30 9 * * 1-5'
+    # 北京时间每天18:10触发（UTC+8是10:10）
+    - cron: '10 10 * * 1-5'
   workflow_dispatch: # 允许手动触发测试
 
 jobs:
@@ -18,7 +18,7 @@ jobs:
             -d '{
               "msgtype": "text",
               "text": {
-                "content": "🎉 小伙伴们，别忘了云效任务（关闭状态、登记工时！）",
+                "content": "🎉 小伙伴们，下班时间到啦！\n记得写今日总结和明日计划哦~",
                 "mentioned_list": ["@all"]
               }
             }'
