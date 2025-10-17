@@ -19,9 +19,9 @@ jobs:
           CURRENT_MINUTE=$(date -u +%M)
           
           if [ "$CURRENT_HOUR" = "09" ] && [ "$CURRENT_MINUTE" = "45" ]; then
-            MESSAGE="🕔 【第一次提醒】小伙伴们，快下班啦！开始检查云效任务关闭情况"
+            MESSAGE="🕔 【重要提醒】小伙伴们，再次提醒！检查云效任务关闭情况以及工时登记（8小时）"
           else
-            MESSAGE="🎉 【第二次提醒】小伙伴们，再次提醒！检查云效任务关闭情况以及工时登记（8小时）"
+            MESSAGE="🎉 【重要提醒】小伙伴们，再次提醒！检查云效任务关闭情况以及工时登记（8小时）"
           fi
           
           curl -X POST \
