@@ -2,10 +2,11 @@ name: 下班提醒
 
 on:
   schedule:
-    # 调整为17:45触发（UTC 09:45），预计17:50-17:55收到
-    - cron: '45 9 * * 1-5'
-    # 调整为18:05触发（UTC 10:05），预计18:10-18:15收到
-    - cron: '05 10 * * 1-5'
+    # 周一~四：17:45、18:05
+    - cron: '45 9 * * 1-4'
+    - cron: '05 10 * * 1-4'
+    # 周五：只 17:00 发一次，不加班
+    - cron: '00 9 * * 5'
   workflow_dispatch:
 
 jobs:
@@ -14,17 +15,24 @@ jobs:
     steps:
       - name: 发送企微提醒
         run: |
-          # 获取当前UTC时间来判断是哪次提醒
-          CURRENT_HOUR=$(date -u +%H)
-          CURRENT_MINUTE=$(date -u +%M)
-          
-          if [ "$CURRENT_HOUR" = "09" ] && [ "$CURRENT_MINUTE" = "45" ]; then
-            MESSAGE="🕔 【重要提醒】小伙伴们，再次提醒！检查云效任务关闭情况以及工时登记（8小时），监控表进度更新"
-          else
-            MESSAGE="🎉 【重要提醒】小伙伴们，再次提醒！检查云效任务关闭情况以及工时登记（8小时），监控表进度更新，加班的同学现在就去填申报表！"
+          CURRENT_TIME=$(date -u +%H%M)
+          CURRENT_WEEKDAY=$(date -u +%u)
+
+          if [ $CURRENT_WEEKDAY -ge 1 ] && [ $CURRENT_WEEKDAY -le 4 ]; then
+            if [ "$CURRENT_TIME" -ge 0944 ] && [ "$CURRENT_TIME" -le 0946 ]; then
+              MESSAGE="🕔 【下班提醒】检查云效任务关闭、工时登记（8小时）、监控表进度更新"
+            elif [ "$CURRENT_TIME" -ge 1004 ] && [ "$CURRENT_TIME" -le 1006 ]; then
+              MESSAGE="🎉 【下班提醒】检查云效任务、工时登记、监控表进度，加班同学填申报表！"
+            fi
+          elif [ $CURRENT_WEEKDAY -eq 5 ]; then
+            MESSAGE="🕔 【周五愉快】检查云效任务、工时登记、监控表进度，祝大家周末愉快！"
           fi
-          
-          curl -X POST \
+
+          if [ -z "$MESSAGE" ]; then
+            MESSAGE="⏰ 【测试提醒】检查云效任务、工时登记、监控表进度"
+          fi
+
+          RESPONSE=$(curl -s -X POST \
             "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=${{ secrets.WEBHOOK_KEY }}" \
             -H "Content-Type: application/json" \
             -d "{
@@ -33,4 +41,11 @@ jobs:
                 \"content\": \"$MESSAGE\",
                 \"mentioned_list\": [\"@all\"]
               }
-            }"
+            }")
+
+          if echo "$RESPONSE" | grep -q "\"errcode\":0"; then
+            echo "✅ 发送成功"
+          else
+            echo "❌ 发送失败"
+            exit 1
+          fi
