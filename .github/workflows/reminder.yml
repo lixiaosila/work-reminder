@@ -2,9 +2,13 @@ name: 下班提醒
 
 on:
   schedule:
-    # 合并 Cron 规则：周一到周四 9:45/10:05、周五 9:00（UTC 时间）
-    - cron: '45 9,05 10 * * 1-4'  # 周一~四：UTC 9:45、10:05
-    - cron: '00 9 * * 5'          # 周五：UTC 9:00
+    # 换算逻辑：北京时间 = UTC + 8小时
+    # 周一到周四 17:45 提醒 → UTC 9:45 → cron: 45 9 * * 1-4
+    # 周一到周四 18:05 提醒 → UTC 10:05 → cron: 05 10 * * 1-4
+    # 周五 17:00 提醒 → UTC 9:00 → cron: 00 9 * * 5
+    - cron: '45 9 * * 1-4'    # 周一~四 UTC 9:45 → 北京时间 17:45
+    - cron: '05 10 * * 1-4'   # 周一~四 UTC 10:05 → 北京时间 18:05
+    - cron: '00 9 * * 5'      # 周五 UTC 9:00 → 北京时间 17:00
   workflow_dispatch: # 手动触发
 
 jobs:
@@ -17,17 +21,16 @@ jobs:
         run: |
           # 强制切换到北京时间
           export TZ='Asia/Shanghai'
-          # 获取当前北京时间（补零，确保格式为 0000-2359）
+          # 获取当前北京时间（补零，格式为 HHMM）
           CURRENT_TIME=$(date +%H%M)
           CURRENT_WEEKDAY=$(date +%u) # 1=周一，5=周五，7=周日
           
           # 初始化消息变量
           MESSAGE=""
           
-          # ========== 核心修改：放宽时间判断范围 + 简化逻辑 ==========
           # 周一到周四逻辑
           if [ $CURRENT_WEEKDAY -ge 1 ] && [ $CURRENT_WEEKDAY -le 4 ]; then
-            # 匹配 17:45 左右（放宽到 17:40-17:50，避免触发延迟）
+            # 匹配 17:45 左右（放宽到 17:40-17:50）
             if [ "$CURRENT_TIME" -ge 1740 ] && [ "$CURRENT_TIME" -le 1750 ]; then
               MESSAGE="🕔 【下班提醒】检查云效任务关闭、工时登记（8小时）、监控表进度更新"
             # 匹配 18:05 左右（放宽到 18:00-18:10）
@@ -42,28 +45,30 @@ jobs:
             fi
           fi
           
-          # ========== 调试完成后，建议注释/删除测试提醒 ==========
-          if [ -z "$MESSAGE" ]; then
-            MESSAGE="⏰ 【测试提醒】当前时间：$(date)，星期$CURRENT_WEEKDAY，时间$CURRENT_TIME，检查云效任务、工时登记、监控表进度"
-          fi
-          
-          # 发送企微消息
-          echo "准备发送消息：$MESSAGE"
-          RESPONSE=$(curl -s -X POST \
-            "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=${WEBHOOK_KEY}" \
-            -H "Content-Type: application/json" \
-            -d "{
-              \"msgtype\": \"text\",
-              \"text\": {
-                \"content\": \"$MESSAGE\",
-                \"mentioned_list\": [\"@all\"]
-              }
-            }")
-          
-          # 检查发送结果
-          if echo "$RESPONSE" | grep -q "\"errcode\":0"; then
-            echo "✅ 发送成功，响应：$RESPONSE"
+          # ========== 调试完成后已删除测试逻辑 ==========
+          # 只有当 MESSAGE 不为空时才发送
+          if [ -n "$MESSAGE" ]; then
+            # 发送企微消息
+            echo "准备发送消息：$MESSAGE"
+            RESPONSE=$(curl -s -X POST \
+              "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=${WEBHOOK_KEY}" \
+              -H "Content-Type: application/json" \
+              -d "{
+                \"msgtype\": \"text\",
+                \"text\": {
+                  \"content\": \"$MESSAGE\",
+                  \"mentioned_list\": [\"@all\"]
+                }
+              }")
+            
+            # 检查发送结果
+            if echo "$RESPONSE" | grep -q "\"errcode\":0"; then
+              echo "✅ 发送成功，响应：$RESPONSE"
+            else
+              echo "❌ 发送失败，响应：$RESPONSE"
+              exit 1
+            fi
           else
-            echo "❌ 发送失败，响应：$RESPONSE"
-            exit 1
+            echo "ℹ️ 当前时间无匹配的提醒规则，跳过发送"
+            exit 0
           fi
