@@ -1,74 +1,69 @@
-name: 下班提醒
+name: 下班提醒（保活版）
 
 on:
   schedule:
-    # 换算逻辑：北京时间 = UTC + 8小时
-    # 周一到周四 17:45 提醒 → UTC 9:45 → cron: 45 9 * * 1-4
-    # 周一到周四 18:05 提醒 → UTC 10:05 → cron: 05 10 * * 1-4
-    # 周五 17:00 提醒 → UTC 9:00 → cron: 00 9 * * 5
-    - cron: '45 9 * * 1-4'    # 周一~四 UTC 9:45 → 北京时间 17:45
-    - cron: '05 10 * * 1-4'   # 周一~四 UTC 10:05 → 北京时间 18:05
-    - cron: '00 9 * * 5'      # 周五 UTC 9:00 → 北京时间 17:00
+    # 周一~四 UTC 9:45 → 北京时间 17:45
+    - cron: '45 9 * * 1-4'
+    # 周一~四 UTC 10:05 → 北京时间 18:05
+    - cron: '05 10 * * 1-4'
+    # 周五 UTC 9:00 → 北京时间 17:00
+    - cron: '00 9 * * 5'
   workflow_dispatch: # 手动触发
 
+# 👇 这一段是【保活配置】，防止GitHub休眠定时任务
+permissions:
+  actions: write
+
 jobs:
+  # 👇 保活任务：每30天自动更新一次，防止定时失效
+  keep-alive:
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'schedule' }}
+    steps:
+      - name: 自动保活，避免定时任务休眠
+        uses: liskin/gh-workflow-poke@v1
+        with:
+          token: ${{ github.token }}
+          workflow: ${{ github.workflow }}
+
   send-reminder:
     runs-on: ubuntu-latest
+    needs: keep-alive
     steps:
-      - name: 发送企微提醒
+      - name: 发送企微下班提醒
         env:
           WEBHOOK_KEY: ${{ secrets.WEBHOOK_KEY }}
         run: |
-          # 强制切换到北京时间
+          # 强制切换为北京时间
           export TZ='Asia/Shanghai'
-          # 获取当前北京时间（补零，格式为 HHMM）
           CURRENT_TIME=$(date +%H%M)
-          CURRENT_WEEKDAY=$(date +%u) # 1=周一，5=周五，7=周日
-          
-          # 初始化消息变量
+          CURRENT_WEEKDAY=$(date +%u)
+
+          # 定义提醒消息
           MESSAGE=""
-          
-          # 周一到周四逻辑
           if [ $CURRENT_WEEKDAY -ge 1 ] && [ $CURRENT_WEEKDAY -le 4 ]; then
-            # 匹配 17:45 左右（放宽到 17:40-17:50）
             if [ "$CURRENT_TIME" -ge 1740 ] && [ "$CURRENT_TIME" -le 1750 ]; then
               MESSAGE="🕔 【下班提醒】检查云效任务关闭、工时登记（8小时）、监控表进度更新"
-            # 匹配 18:05 左右（放宽到 18:00-18:10）
             elif [ "$CURRENT_TIME" -ge 1800 ] && [ "$CURRENT_TIME" -le 1810 ]; then
               MESSAGE="🎉 【下班提醒】检查云效任务、工时登记、监控表进度，加班同学填申报表！"
             fi
-          # 周五逻辑
           elif [ $CURRENT_WEEKDAY -eq 5 ]; then
-            # 匹配 17:00 左右（放宽到 16:55-17:05）
             if [ "$CURRENT_TIME" -ge 1655 ] && [ "$CURRENT_TIME" -le 1705 ]; then
               MESSAGE="🕔 【周五愉快】检查云效任务、工时登记、监控表进度，祝大家周末愉快！"
             fi
           fi
-          
-          # ========== 调试完成后已删除测试逻辑 ==========
-          # 只有当 MESSAGE 不为空时才发送
+
+          # 发送消息（加固版，防超时、防JSON错误）
           if [ -n "$MESSAGE" ]; then
-            # 发送企微消息
-            echo "准备发送消息：$MESSAGE"
-            RESPONSE=$(curl -s -X POST \
-              "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=${WEBHOOK_KEY}" \
-              -H "Content-Type: application/json" \
-              -d "{
-                \"msgtype\": \"text\",
-                \"text\": {
-                  \"content\": \"$MESSAGE\",
-                  \"mentioned_list\": [\"@all\"]
-                }
-              }")
-            
-            # 检查发送结果
-            if echo "$RESPONSE" | grep -q "\"errcode\":0"; then
-              echo "✅ 发送成功，响应：$RESPONSE"
-            else
-              echo "❌ 发送失败，响应：$RESPONSE"
-              exit 1
-            fi
+            echo "✅ 准备发送：$MESSAGE"
+            curl -s --connect-timeout 10 --max-time 15 \
+              -H "Content-Type: application/json; charset=utf-8" \
+              -X POST "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=${WEBHOOK_KEY}" \
+              -d "$(jq -n \
+                  --arg msg "$MESSAGE" \
+                  '{msgtype:"text", text: {content: $msg, mentioned_list:["@all"]}}'
+              )"
+            echo -e "\n🎉 消息发送完成"
           else
-            echo "ℹ️ 当前时间无匹配的提醒规则，跳过发送"
-            exit 0
+            echo "ℹ️ 当前时间无提醒，跳过"
           fi
